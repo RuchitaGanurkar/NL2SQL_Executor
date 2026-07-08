@@ -1,29 +1,31 @@
 import os
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
+import streamlit as st
 
-load_dotenv()  # reads .env file into environment variables
+load_dotenv()  
 
 
 def get_engine():
-    """
-    Builds a PostgreSQL connection string from .env values
-    and returns a SQLAlchemy engine (a reusable connection handler).
-    """
-    db_host = os.getenv("DB_HOST")
-    db_port = os.getenv("DB_PORT")
-    db_name = os.getenv("DB_NAME")
-    db_user = os.getenv("DB_USER")
-    db_password = os.getenv("DB_PASSWORD")
+
+    db_host = st.secrets.get("DB_HOST", os.getenv("DB_HOST", ""))
+    db_name = st.secrets.get("DB_NAME", os.getenv("DB_NAME", ""))
+    db_user = st.secrets.get("DB_USER", os.getenv("DB_USER", ""))
+    db_password = st.secrets.get("DB_PASSWORD", os.getenv("DB_PASSWORD", ""))
+    
+    db_port = str(st.secrets.get("DB_PORT", os.getenv("DB_PORT", "5432")))
+
+   
+    if not db_host or not db_user:
+        st.error("Database configuration variables are missing! Please check your Streamlit Cloud Secrets.")
+        st.stop()
 
     connection_string = (
         f"postgresql+psycopg2://{db_user}:{db_password}"
         f"@{db_host}:{db_port}/{db_name}"
     )
 
-    engine = create_engine(connection_string)
-    return engine
-
+    return create_engine(connection_string)
 
 def test_connection():
     """

@@ -1,15 +1,3 @@
-"""
-app.py — NL2SQL Agentic Query Engine
-Phase 5 + UI Overhaul
-
-UI Design:
-- Dark theme with a professional data-tool aesthetic
-- Left sidebar: schema explorer + connection status
-- Main area: clean chat-style query interface
-- Results: tabbed view (Table | SQL | Attempt Log)
-- Custom CSS injected via st.markdown for polish
-"""
-
 import streamlit as st
 from db.connection import test_connection
 from db.schema_fetcher import fetch_schema, schema_to_prompt_string
