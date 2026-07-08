@@ -5,19 +5,22 @@ import streamlit as st
 
 load_dotenv()  
 
-
 def get_engine():
-
-    db_host = st.secrets.get("DB_HOST", os.getenv("DB_HOST", ""))
-    db_name = st.secrets.get("DB_NAME", os.getenv("DB_NAME", ""))
-    db_user = st.secrets.get("DB_USER", os.getenv("DB_USER", ""))
-    db_password = st.secrets.get("DB_PASSWORD", os.getenv("DB_PASSWORD", ""))
+    db_host = os.getenv("DB_HOST", st.secrets.get("DB_HOST", ""))
+    db_name = os.getenv("DB_NAME", st.secrets.get("DB_NAME", ""))
+    db_user = os.getenv("DB_USER", st.secrets.get("DB_USER", ""))
+    db_password = os.getenv("DB_PASSWORD", st.secrets.get("DB_PASSWORD", ""))
     
-    db_port = str(st.secrets.get("DB_PORT", os.getenv("DB_PORT", "5432")))
+    
+    raw_port = os.getenv("DB_PORT", st.secrets.get("DB_PORT", "5432"))
+    
+    if not raw_port or str(raw_port).strip() == "":
+        db_port = "5432"
+    else:
+        db_port = str(raw_port).strip()
 
-   
     if not db_host or not db_user:
-        st.error("Database configuration variables are missing! Please check your Streamlit Cloud Secrets.")
+        st.error("Database configuration variables are missing! Please check your Render Environment Variables.")
         st.stop()
 
     connection_string = (
@@ -28,10 +31,7 @@ def get_engine():
     return create_engine(connection_string)
 
 def test_connection():
-    """
-    Quick sanity check: tries to connect and run SELECT 1.
-    Returns (True, None) on success, (False, error_message) on failure.
-    """
+
     try:
         engine = get_engine()
         with engine.connect() as conn:
