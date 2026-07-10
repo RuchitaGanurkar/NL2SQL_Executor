@@ -1,5 +1,9 @@
+import logging
+
 from sqlalchemy import text
 from db.connection import get_engine
+
+logger = logging.getLogger("nl2sql.history")
 
 
 def save_query(
@@ -50,8 +54,7 @@ def save_query(
             row = result.fetchone()
             return row[0] if row else None
     except Exception as e:
-        
-        print(f"[query_history] save failed: {e}")
+        logger.exception("query_history save failed")
         return None
 
 
@@ -93,5 +96,5 @@ def fetch_history(limit: int = 20) -> list[dict]:
         return [dict(zip(columns, row)) for row in rows]
 
     except Exception as e:
-        print(f"[query_history] fetch failed: {e}")
+        logger.exception("query_history fetch failed")
         return []

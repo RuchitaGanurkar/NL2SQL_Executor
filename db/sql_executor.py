@@ -1,6 +1,10 @@
+import logging
+
 import pandas as pd
 from sqlalchemy import text
 from db.connection import get_engine
+
+logger = logging.getLogger("nl2sql.sql")
 
 
 class UnsafeQueryError(Exception):
@@ -44,6 +48,7 @@ def execute_sql(sql: str):
         }
     """
     if not _is_safe_select(sql):
+        logger.warning("Blocked unsafe SQL query")
         return {
             "success": False,
             "error": (
@@ -54,6 +59,7 @@ def execute_sql(sql: str):
         }
 
     try:
+        logger.info("Executing SQL: %s", sql.strip().replace("\n", " "))
         engine = get_engine()
         with engine.connect() as conn:
             result = conn.execute(text(sql))
@@ -61,6 +67,7 @@ def execute_sql(sql: str):
             columns = list(result.keys())
 
         df = pd.DataFrame(rows, columns=columns)
+        logger.info("SQL succeeded, %d row(s) returned", len(df))
 
         return {
             "success": True,
@@ -69,6 +76,7 @@ def execute_sql(sql: str):
         }
 
     except Exception as e:
+        logger.exception("SQL execution failed")
         return {
             "success": False,
             "error": str(e),

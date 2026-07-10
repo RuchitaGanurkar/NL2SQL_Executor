@@ -1,9 +1,18 @@
+import logging
+
 import streamlit as st
 from db.connection import test_connection
 from db.schema_fetcher import fetch_schema, schema_to_prompt_string
 from agents.nl2sql_agent import generate_sql_with_retry
 from agents.explainer_agent import explain_result
+from agents.llm_client import get_llm_provider, get_model_name, test_llm_connection
 from db.query_history import save_query, fetch_history
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+)
+logger = logging.getLogger("nl2sql.app")
 
 st.set_page_config(
     page_title="NL2SQL Agent",
@@ -124,15 +133,32 @@ with st.sidebar:
     st.markdown("### NL2SQL Agent")
     st.divider()
 
+    logger.info("App startup — provider=%s model=%s", get_llm_provider(), get_model_name())
+
     try:
         ok, err = test_connection()
         if ok:
             st.markdown('<span class="stat-pill success-pill"> PostgreSQL connected</span>', unsafe_allow_html=True)
         else:
             st.markdown('<span class="stat-pill error-pill"> PostgreSQL disconnected</span>', unsafe_allow_html=True)
-            st.code(err, language="text")
+            st.code(err or "Unknown database error", language="text")
     except Exception as e:
+        logger.exception("Database status check failed")
         st.markdown('<span class="stat-pill error-pill"> Connection error</span>', unsafe_allow_html=True)
+        st.code(str(e), language="text")
+
+    try:
+        llm_ok, llm_info = test_llm_connection()
+        if llm_ok:
+            st.markdown(f'<span class="stat-pill success-pill"> LLM ready</span>', unsafe_allow_html=True)
+            st.caption(llm_info)
+        else:
+            st.markdown('<span class="stat-pill error-pill"> LLM unavailable</span>', unsafe_allow_html=True)
+            st.code(llm_info or "Unknown LLM error", language="text")
+    except Exception as e:
+        logger.exception("LLM status check failed")
+        st.markdown('<span class="stat-pill error-pill"> LLM error</span>', unsafe_allow_html=True)
+        st.code(str(e), language="text")
 
     st.divider()
 
@@ -160,6 +186,7 @@ with st.sidebar:
                             unsafe_allow_html=True
                         )
     except Exception as e:
+        logger.exception("Schema explorer failed")
         st.error(f"Schema error: {e}")
 
     st.divider()
@@ -240,12 +267,19 @@ if run:
     if not question.strip():
         st.warning("Type a question first.")
     else:
+        logger.info("Run requested for question: %s", question)
         try:
             schema = fetch_schema()
             schema_text = schema_to_prompt_string(schema)
+            logger.info("Loaded schema with %d table(s)", len(schema))
 
             with st.spinner("Agent is thinking..."):
                 result = generate_sql_with_retry(question, schema_text)
+            logger.info(
+                "Agent finished success=%s attempts=%s",
+                result.get("success"),
+                result.get("attempts"),
+            )
 
             if result.get("final_sql") is None:
                 save_query(
@@ -363,6 +397,13 @@ if run:
                             st.divider()
 
         except Exception as e:
+            logger.exception("Query run failed")
             st.error("Something went wrong")
             st.code(str(e), language="text")
-            st.info("Make sure Ollama is running: `ollama serve` and `ollama pull mistral`")
+            if get_llm_provider() == "ollama":
+                st.info(
+                    "Ollama must be running and reachable. "
+                    "Locally: `ollama serve` and `ollama pull mistral`. "
+                    "On Streamlit Cloud: Ollama on your PC is not reachable — "
+                    "run Streamlit locally, or set OLLAMA_HOST to a tunnel URL in secrets."
+                )

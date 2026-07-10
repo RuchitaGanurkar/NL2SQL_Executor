@@ -1,7 +1,9 @@
-import ollama
+import logging
+
+from agents.llm_client import chat
 from db.sql_executor import execute_sql
 
-MODEL_NAME = "mistral"
+logger = logging.getLogger("nl2sql.agent")
 
 # How many times the agent is allowed to rewrite SQL before giving up
 MAX_RETRIES = 3
@@ -37,21 +39,18 @@ RULES:
 """
 
 
-def _call_ollama(system_prompt: str, user_prompt: str) -> str:
-    """Single Ollama call — extracted so both generate and correct use same settings."""
-    response = ollama.chat(
-        model=MODEL_NAME,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        options={
-            "temperature": 0,
-            "num_predict": 300,
-            "top_k": 10,
-        },
+def _call_llm(system_prompt: str, user_prompt: str) -> str:
+    """Single LLM call — shared by generate and correct paths."""
+    raw = chat(
+        system_prompt,
+        user_prompt,
+        temperature=0,
+        num_predict=300,
+        top_k=10,
     )
-    return _clean_sql(response["message"]["content"].strip())
+    cleaned = _clean_sql(raw)
+    logger.info("Generated SQL candidate (%d chars)", len(cleaned))
+    return cleaned
 
 
 def generate_sql(question: str, schema_text: str) -> str:
@@ -67,7 +66,7 @@ USER QUESTION:
 
 SQL QUERY:"""
 
-    return _call_ollama(SYSTEM_PROMPT, user_prompt)
+    return _call_llm(SYSTEM_PROMPT, user_prompt)
 
 
 def _correct_sql(question: str, schema_text: str, bad_sql: str, error: str) -> str:
@@ -89,7 +88,7 @@ POSTGRESQL ERROR:
 
 CORRECTED SQL QUERY:"""
 
-    return _call_ollama(CORRECTION_SYSTEM_PROMPT, user_prompt)
+    return _call_llm(CORRECTION_SYSTEM_PROMPT, user_prompt)
 
 
 def generate_sql_with_retry(question: str, schema_text: str) -> dict:
@@ -111,6 +110,7 @@ def generate_sql_with_retry(question: str, schema_text: str) -> dict:
     }
     """
     attempt_log = []
+    logger.info("Starting NL2SQL for question: %s", question)
 
     # --- Attempt 1: first-pass generation ---
     sql = generate_sql(question, schema_text)
@@ -124,6 +124,7 @@ def generate_sql_with_retry(question: str, schema_text: str) -> dict:
             "attempt_log": [],
         }
 
+    logger.info("Attempt 1 SQL: %s", sql)
     result = execute_sql(sql)
     attempt_log.append({
         "attempt": 1,

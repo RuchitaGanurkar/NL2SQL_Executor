@@ -1,7 +1,9 @@
 import json
-import ollama
+import logging
 
-MODEL_NAME = "mistral"
+from agents.llm_client import chat
+
+logger = logging.getLogger("nl2sql.explainer")
 
 EXPLAINER_SYSTEM_PROMPT = """You are a data analyst assistant explaining query results
 to a non-technical business user.
@@ -61,20 +63,15 @@ RESULT ROWS (JSON):
 INSIGHT:"""
 
     try:
-        response = ollama.chat(
-            model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": EXPLAINER_SYSTEM_PROMPT},
-                {"role": "user", "content": user_prompt},
-            ],
-            options={
-                "temperature": 0.3,   # slight creativity — not robotic, not hallucinating
-                "num_predict": 400,   # explanations are longer than SQL
-                "top_k": 20,
-            },
+        logger.info("Generating result explanation for question: %s", question)
+        return chat(
+            EXPLAINER_SYSTEM_PROMPT,
+            user_prompt,
+            temperature=0.3,
+            num_predict=400,
+            top_k=20,
         )
-        return response["message"]["content"].strip()
 
     except Exception as e:
-        # Never crash the UI because explanation failed
+        logger.exception("Explanation generation failed")
         return f"Results loaded successfully. (Explanation unavailable: {str(e)})"
